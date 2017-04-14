@@ -264,11 +264,11 @@ precis(log.model)
 posterior.samples <- data.frame( mvrnorm(n = trials, 
                                          mu = coef(log.model), 
                                          Sigma = vcov(log.model)) )
-# function to simulate height from log model
+# function to simulate height MEANS from log model
 mu.link <- function(weight) posterior.samples$a + posterior.samples$b * weight
 # simulated heights model
 mu <- sapply(X = log(weight.seq), FUN = mu.link) # aqui
-# mean and intervals for the simulated heights model
+# mean and intervals for the simulated heights MEANS!!
 mu.mean <- apply(X = mu, MARGIN = 2, FUN = mean)
 mu.hpdi <- apply(X = mu, MARGIN = 2, FUN = HPDI, prob = .89)
 
