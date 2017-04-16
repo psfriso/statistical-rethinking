@@ -1,0 +1,152 @@
+---
+title: "chapter05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Chapter 05 
+
+Loading data
+
+```{r libraries, include=FALSE, echo=FALSE}
+library('rethinking')
+data("WaffleDivorce")
+```
+```{r}
+d = WaffleDivorce
+head(d)
+```
+
+
+### Standarize predictors
+
+```{r standarize, echo=TRUE}
+d$MedianAgeMarriage.s = (d$MedianAgeMarriage - mean(d$MedianAgeMarriage) ) / sd(d$MedianAgeMarriage)
+```
+
+### Fit the model
+
+```{r}
+m5.1 = map(
+  alist(
+    Divorce ~ dnorm( mu, sigma),
+    mu <- a + bA * MedianAgeMarriage.s, 
+    a ~ dnorm( 10, 10),
+    bA ~ dnorm( 0, 1),
+    sigma ~ dunif( 0, 10)
+  ), 
+  data = d
+)
+```
+Compute the percentile interval of mean.
+
+1. Vector with range of *MedianAgeMarriage.s* (standarized)
+
+2. Obtain the means of sampled values
+
+3. Interval of means
+
+```{r , echo=TRUE, include=TRUE, tidy=TRUE, warning=FALSE, results= "hide"}
+MAM.seq = seq( from = -3, to = 3.5, length.out = 30)
+mu = link(m5.1, data = data.frame(MedianAgeMarriage.s = MAM.seq))
+mu.PI = apply( mu, 2, PI)
+```
+Plotting the resulting model
+```{r, newplot = TRUE}
+{plot( Divorce ~ MedianAgeMarriage.s, data = d, col = rangi2)
+abline( a = coef(m5.1)['a'] , b = coef(m5.1)['bA']  )
+shade( mu.PI, MAM.seq)}
+```
+```{r}
+precis(m5.1)
+```
+
+## Fitting a multivariate model
+
+We are going to use two predictors (marriage rate and marriage median age) to model the divorce rate per state
+
+Here is the fitting code:
+
+```{r}
+d$Marriage.s  = (d$Marriage - mean(d$Marriage) ) / sd(d$Marriage)
+
+m5.3 = map(
+  alist(
+    Divorce ~ dnorm( mu, sigma), 
+    mu <- a + bR * Marriage.s + bA * MedianAgeMarriage.s,
+    a ~ dnorm( 10, 10),
+    bR ~ dnorm( 0, 1),
+    bA ~ dnorm( 0, 1),
+    sigma ~ dunif(0,10)
+  ), data = d
+)
+precis( m5.3)
+```
+
+
+We observe that the posterior mean for marriage rate (bR) is now close to zero with probability on both sides. Let's see that in a plot:
+
+
+```{r}
+plot( precis( m5.3) )
+```
+
+Interpretation:
+
+*Once we know median age at marriage for a state (bA), there is little or no additional predictive power in also knowing the rate of marriage in that state.*
+
+
+## Plotting multivariate posteriors
+
+### Predictor residual plot
+
+We have so far 2 predictors:
+
+1. marriage rate *Marriage.s*
+
+2. median age at marriage *MedianAgeMarriage.s*
+
+To compute the predictor residuals for both of them we will use the other predictor to model it.
+
+```{r}
+
+m5.4 = map(
+  alist(
+    Marriage.s ~ dnorm( mu, sigma ),
+    mu <- a + b * MedianAgeMarriage.s , 
+    a ~ dnorm( 0, 10 ),
+    b ~ dnorm( 0, 1 ),
+    sigma ~ dunif( 0, 10)
+  ), 
+  data = d
+)
+```
+
+To compute the residuals:
+
+1. Compute the expected value at MAP for each state
+
+2. Compute residual for each state
+
+```{r}
+mu = coef( m5.4 )['a'] + coef( m5.4 )[ 'b' ] * d$MedianAgeMarriage.s
+m.resid = d$Marriage.s - mu # actual value - predicted value
+```
+
+Plotting the relationship
+
+```{r}
+{ plot( Marriage.s ~ MedianAgeMarriage.s, d, col = rangi2)
+  abline( a = coef( m5.4)['a'] , b = coef(m5.4)['b'] )
+  # loop over states
+  for (i in 1:length(m.resid)){
+    x = d$MedianAgeMarriage.s[i] # location of line segment
+    y = d$Marriage.s[i] # observed end point of line segment (actual value)
+    lines( c(x,x) , c( mu[i], y) , lwd = 0.5 , col = col.alpha("black", 0.5) )
+  }
+}
+```
+
