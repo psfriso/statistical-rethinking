@@ -1,0 +1,382 @@
+---
+title: "chapter06"
+author: "Pedro Sfriso"
+date: "20/04/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Chapter 06 Exercices
+
+#### Hard 
+
+Preparing the models
+
+```{r loading}
+library(rethinking)
+data("Howell1")
+d = Howell1
+
+# standarizing age 
+d$age = (d$age - mean(d$age) )/sd(d$age)
+
+set.seed( 1000 )
+i = sample( 1:nrow(d), size = nrow(d)/2 )
+d1 = d[  i, ]
+d2 = d[ -i, ]
+cat( dim(d1), dim(d2) )
+```
+
+We have randomly formed two data frames, each with 272 rows. This will be our test and training set.
+
+#### Building the models
+
+```{r models}
+
+m1 = alist(
+  height ~ dnorm(mean = mu, sd = sigma),
+  mu <- a + b1 * age,
+  c(a, b1) ~ dnorm(mean = 0, sd = 20),
+  sigma ~ dunif(min = 0, max = 50)
+)
+
+m2 = alist(
+  height ~ dnorm(mean = mu, sd = sigma),
+  mu <- a + b1 * age + b2 * age^2,
+  c(a, b1, b2) ~ dnorm(mean = 0, sd = 20),
+  sigma ~ dunif(min = 0, max = 50)
+)
+
+m3 = alist(
+  height ~ dnorm(mean = mu, sd = sigma),
+  mu <- a + b1 * age + b2 * age^2 + b3 * age^3,
+  c(a, b1, b2, b3) ~ dnorm(mean = 0, sd = 20),
+  sigma ~ dunif(min = 0, max = 50)
+)
+
+m4 = alist(
+  height ~ dnorm(mean = mu, sd = sigma),
+  mu <- a + b1 * age + b2 * age^2 + b3 * age^3 + b4 * age^4,
+  c(a, b1, b2, b3, b4) ~ dnorm(mean = 0, sd = 20),
+  sigma ~ dunif(min = 0, max = 50)
+)
+
+m5 = alist(
+  height ~ dnorm(mean = mu, sd = sigma),
+  mu <- a + b1 * age + b2 * age^2 + b3 * age^3 + b4 * age^4 + b5 * age^5,
+  c(a, b1, b2, b3, b4, b5) ~ dnorm(mean = 0, sd = 20),
+  sigma ~ dunif(min = 0, max = 50)
+)
+
+m6 = alist(
+  height ~ dnorm(mean = mu, sd = sigma),
+  mu <- a + b1 * age + b2 * age^2 + b3 * age^3 + b4 * age^4 + b5 * age^5 + b6 * age^6,
+  c(a, b1, b2, b3, b4, b5, b6) ~ dnorm(mean = 0, sd = 20),
+  sigma ~ dunif(min = 0, max = 50)
+)
+
+```
+
+#### Fitting the models
+
+First set reasonable starting conditions:
+
+```{r}
+a.start <- mean(d$height)
+sigma.start <- sd(d$height)
+```
+
+Model fitting
+
+```{r model_fitting}
+
+fit.m1 <- map( flist = m1, data = d1, start = list(a = a.start, sigma = sigma.start, b1 = 0))
+
+fit.m2 <- map( flist = m2, data = d1, start = list(a = a.start, sigma = sigma.start, b1 = 0, b2 = 0))
+
+fit.m3 <- map( flist = m3, data = d1, start = list(a = a.start, sigma = sigma.start, b1 = 0, b2 = 0, b3 = 0))
+
+fit.m4 <- map( flist = m4, data = d1, start = list(a = a.start, sigma = sigma.start, b1 = 0, b2 = 0, b3 = 0, b4 = 0))
+
+fit.m5 <- map( flist = m5, data = d1, start = list(a = a.start, sigma = sigma.start, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0))
+
+fit.m6 <- map( flist = m6, data = d1, start = list(a = a.start, sigma = sigma.start, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0))
+
+```
+
+###### 6H1: Model comparison.
+
+```{r}
+# WAIC is the default choice
+compare(fit.m1, fit.m2, fit.m3, fit.m4, fit.m5, fit.m6)
+```
+
+###### 6H2: Model plotting
+
+Common settings.
+
+```{r}
+n.trials <- 1e4
+age.seq <- seq(from = -2, to = 3.5, length.out = 58)
+prediction.data <- data.frame(age = age.seq)
+```
+
+And basic functions not shown.
+
+```{r, echo=FALSE, include=FALSE}
+
+computeMu <- function(model, data, n.trials) {
+  mu <- link(fit = model, data = data, n = n.trials)
+  return(mu)
+}
+
+computeMuMean <- function(mu) {
+  mu.mean <- apply(X = mu, MARGIN = 2, FUN = mean)
+  return(mu.mean)
+}
+
+computeMuPI <- function(mu) {
+  mu.PI <- apply(X = mu, MARGIN = 2, FUN = PI, prob = .97)
+  return(mu.PI)
+}
+
+simulateHeights <- function(model, prediction.data) {
+  simulated.heights <- sim(fit = model, data = prediction.data)
+  return(simulated.heights)
+}
+
+plotResults <- function(model, prediction.data, original.data, n.trials) {
+  mu <- computeMu(model, prediction.data, n.trials)
+  mu.mean <- computeMuMean(mu)
+  mu.PI <- computeMuPI(mu)
+  simulated.heights <- simulateHeights(model = model, prediction.data = prediction.data)
+  simulated.heights.PI <- apply(X = simulated.heights, MARGIN = 2, FUN = PI)
+  plot(height ~ age, data = original.data, col = rangi2)
+  lines(x = prediction.data$age, y = mu.mean, lty = 2)
+  lines(x = prediction.data$age, y = mu.PI[1,], lty = 2)
+  lines(x = prediction.data$age, y = mu.PI[2,], lty = 2)
+  shade(object = simulated.heights.PI, lim = prediction.data$age)
+}
+```
+
+```{r}
+plotResults(model = fit.m1, prediction.data = prediction.data, original.data = d1, n.trials = n.trials)
+```
+```{r}
+plotResults(model = fit.m2, prediction.data = prediction.data, original.data = d1, n.trials = n.trials)
+```
+```{r}
+plotResults(model = fit.m3, prediction.data = prediction.data, original.data = d1, n.trials = n.trials)
+```
+
+
+
+```{r}
+plotResults(model = fit.m4, prediction.data = prediction.data, original.data = d1, n.trials = n.trials)
+```
+
+
+```{r}
+plotResults(model = fit.m5, prediction.data = prediction.data, original.data = d1, n.trials = n.trials)
+```
+
+
+
+```{r}
+plotResults(model = fit.m6, prediction.data = prediction.data, original.data = d1, n.trials = n.trials)
+```
+
+```{r}
+precis(fit.m6)
+```
+
+
+```{r}
+comparison = compare(fit.m1, fit.m2, fit.m3, fit.m4, fit.m5, fit.m6)
+plot(comparison)
+```
+
+```{r, echo=FALSE}
+weights = comparison@output$weight
+
+# simulate heights
+
+simulated.heights.m1 <- simulateHeights(model = fit.m1, prediction.data = prediction.data)
+
+simulated.heights.m2 <- simulateHeights(model = fit.m2, prediction.data = prediction.data)
+
+simulated.heights.m3 <- simulateHeights(model = fit.m3, prediction.data = prediction.data)
+
+simulated.heights.m4 <- simulateHeights(model = fit.m4, prediction.data = prediction.data)
+
+simulated.heights.m5 <- simulateHeights(model = fit.m5, prediction.data = prediction.data)
+
+simulated.heights.m6 <- simulateHeights(model = fit.m6, prediction.data = prediction.data)
+
+```
+```{r}
+sim.heights =   weights[6]* simulated.heights.m1 +
+                weights[5]* simulated.heights.m2 +
+                weights[4]* simulated.heights.m3 +
+                weights[1]* simulated.heights.m4 +
+                weights[2]* simulated.heights.m5 +
+                weights[3]* simulated.heights.m6
+```
+
+Plot results
+
+```{r}
+simulated.heights.ensemble.PI <- apply( X = sim.heights, MARGIN = 2, FUN = PI)
+```
+
+```{r}
+{plot(height ~ age, data = d1, col = rangi2)
+shade(object = simulated.heights.ensemble.PI, lim = prediction.data$age )}
+```
+
+
+##### Compute deviance for the test sample
+
+```{r}
+
+## model 1
+coefs = coef(fit.m1)
+a = coefs["a"]
+b1 = coefs["b1"]
+sigma = coefs["sigma"]
+mu <- a + b1*d2$age 
+log.likelihood <- sum( dnorm(x = d2$height, mean = mu, sd = sigma, log = TRUE) )
+dev.m1 <- -2*log.likelihood
+
+## model 2
+coefs = coef(fit.m2)
+a = coefs["a"]
+b1 = coefs["b1"]
+b2 = coefs["b2"]
+sigma = coefs["sigma"]
+mu <- a + b1*d2$age + b2*(d2$age)^2
+log.likelihood <- sum( dnorm(x = d2$height, mean = mu, sd = sigma, log = TRUE) )
+dev.m2 <- -2*log.likelihood
+
+## model 3
+coefs = coef(fit.m3)
+a = coefs["a"]
+b1 = coefs["b1"]
+b2 = coefs["b2"]
+b3 = coefs["b3"]
+sigma = coefs["sigma"]
+mu <- a + b1*d2$age + b2*(d2$age)^2 + b3*(d2$age)^3 
+log.likelihood <- sum( dnorm(x = d2$height, mean = mu, sd = sigma, log = TRUE) )
+dev.m3 <- -2*log.likelihood
+
+
+## model 4
+coefs = coef(fit.m4)
+a = coefs["a"]
+b1 = coefs["b1"]
+b2 = coefs["b2"]
+b3 = coefs["b3"]
+b4 = coefs["b4"]
+sigma = coefs["sigma"]
+mu <- a + b1*d2$age + b2*(d2$age)^2 + b3*(d2$age)^3 + b4*(d2$age)^4 
+log.likelihood <- sum( dnorm(x = d2$height, mean = mu, sd = sigma, log = TRUE) )
+dev.m4 <- -2*log.likelihood
+
+
+## model 5
+coefs = coef(fit.m5)
+a = coefs["a"]
+b1 = coefs["b1"]
+b2 = coefs["b2"]
+b3 = coefs["b3"]
+b4 = coefs["b4"]
+b5 = coefs["b5"]
+sigma = coefs["sigma"]
+mu <- a + b1*d2$age + b2*(d2$age)^2 + b3*(d2$age)^3 + b4*(d2$age)^4 + b5*(d2$age)^5 
+log.likelihood <- sum( dnorm(x = d2$height, mean = mu, sd = sigma, log = TRUE) )
+dev.m5 <- -2*log.likelihood
+
+## model 6
+coefs = coef(fit.m6)
+a = coefs["a"]
+b1 = coefs["b1"]
+b2 = coefs["b2"]
+b3 = coefs["b3"]
+b4 = coefs["b4"]
+b5 = coefs["b5"]
+b6 = coefs["b6"]
+sigma = coefs["sigma"]
+mu <- a + b1*d2$age + b2*(d2$age)^2 + b3*(d2$age)^3 + b4*(d2$age)^4 + b5*(d2$age)^5 + b6*(d2$age)^6
+log.likelihood <- sum( dnorm(x = d2$height, mean = mu, sd = sigma, log = TRUE) )
+dev.m6 <- -2*log.likelihood
+
+```
+
+```{r}
+# echo deviances
+r1 = c('dev.m1:', dev.m1)
+r2 = c('dev.m2:', dev.m2)
+r3 = c('dev.m3:', dev.m3)
+r4 = c('dev.m4:', dev.m4)
+r5 = c('dev.m5:', dev.m5)
+r6 = c('dev.m6:', dev.m6)
+rbind(r1,r2,r3,r4,r5,r6)
+```
+
+### 6H6
+
+Use the following model with more strongly regularizing priors on the coefficients.
+
+Fit the model using d1.
+
+```{r}
+m6.reg = alist(
+  height ~ dnorm(mean = mu, sd = sigma),
+  mu <- a + b1 * age + b2 * age^2 + b3 * age^3 + b4 * age^4 + b5 * age^5 + b6 * age^6,
+  c(a, b1, b2, b3, b4, b5, b6) ~ dnorm(mean = 0, sd = 5),
+  sigma ~ dunif(min = 0, max = 20)
+)
+
+fit.m6.reg =  map(flist = m6.reg, data = d1, start = list(a = 156.42, sigma =  8.17, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0))
+
+```
+
+Reporting MAP for the model parameters
+
+```{r}
+precis( fit.m6.reg)
+```
+
+```{r}
+plot( coeftab(fit.m6,fit.m6.reg) , pars=c("b1","b2","b3","b4","b5","b6") )
+```
+
+
+```{r}
+plotResults(model = fit.m6.reg, prediction.data = prediction.data, original.data = d1, n.trials = n.trials)
+```
+
+Out of sample deviance
+
+```{r}
+# compute out-of-sample deviance using data in d2
+coefs = coef(fit.m6.reg)
+a = coefs["a"]
+b1 = coefs["b1"]
+b2 = coefs["b2"]
+b3 = coefs["b3"]
+b4 = coefs["b4"]
+b5 = coefs["b5"]
+b6 <- coefs["b6"]
+sigma <- coefs["sigma"]
+mu <- a + b1 * d2$age + b2 * (d2$age)^2 + b3 * (d2$age)^3 + b4 * (d2$age)^4 + b5 * (d2$age)^5 + b6 * (d2$age)^6
+log.likelihood <- sum( dnorm(x = d2$height, mean = mu, sd = sigma, log = TRUE) )
+out.of.sample.deviance <- -2*log.likelihood
+
+out.of.sample.deviance
+```
+
+
